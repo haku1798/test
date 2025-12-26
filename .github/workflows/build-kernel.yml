@@ -271,27 +271,33 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
         # 1. Setup Toolchain Path
-        export CLANG_PATH=$GITHUB_WORKSPACE/kernel_workspace/clang/bin
-        export PATH=$CLANG_PATH:$PATH
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$PATH
         
-        # 2. Setup Ccache (The Safe Way)
-        if [ ${{ env.ENABLE_CCACHE }} = true ]; then
-            sudo apt-get install ccache -y
-            # Create a symlink so 'clang' actually calls 'ccache clang'
+        # 2. Setup Ccache without shell quoting issues
+        if [ "${{ env.ENABLE_CCACHE }}" = "true" ]; then
+            sudo apt-get update && sudo apt-get install -y ccache
+            # Create a dedicated bin folder for ccache symlinks
             mkdir -p $GITHUB_WORKSPACE/ccache_bin
-            ln -s $(which ccache) $GITHUB_WORKSPACE/ccache_bin/clang
+            ln -sf $(which ccache) $GITHUB_WORKSPACE/ccache_bin/clang
+            ln -sf $(which ccache) $GITHUB_WORKSPACE/ccache_bin/aarch64-linux-android-gcc
             export PATH=$GITHUB_WORKSPACE/ccache_bin:$PATH
-            echo "Ccache enabled via PATH symlink"
+            echo "Ccache configured via PATH"
         fi
 
-        # 3. Setup Build Info
+        # 3. Setup Build Environment Variables
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # 4. Run Build (Simple CC=clang, no quotes needed)
-        # The 'ccache' is handled automatically because of the PATH order
-        make -j$(nproc --all) O=out ARCH=${{ env.KERNEL_ARCH }} CC=clang ${{ env.EXTRA_CMDS }} ${{ env.DEVICE }}_defconfig
-        make -j$(nproc --all) O=out ARCH=${{ env.KERNEL_ARCH }} CC=clang ${{ env.EXTRA_CMDS }}
+        # 4. Define common make arguments to ensure consistency
+        # Using a variable prevents repeating complex strings
+        MAKE_OPTS="-j$(nproc --all) O=out ARCH=${{ env.KERNEL_ARCH }} CC=clang ${{ env.EXTRA_CMDS }}"
+
+        # 5. Clean out directory to reset failed capability checks
+        rm -rf out && mkdir out
+
+        # 6. Generate configuration and build
+        make $MAKE_OPTS ${{ env.DEVICE }}_defconfig
+        make $MAKE_OPTS
 
     - name: Check a kernel output files
       run: |
