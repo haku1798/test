@@ -119,21 +119,22 @@ jobs:
       run: |
         cd kernel_workspace/android-kernel
         
-        # 1. SETUP PATHS - Fixed to ensure the actual binaries are found
-        # We search for the bin directories specifically
-        GCC64_PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin
-        GCC32_PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin
-        CLANG_PATH=$GITHUB_WORKSPACE/kernel_workspace/clang/bin
-        export PATH=$CLANG_PATH:$GCC64_PATH:$GCC32_PATH:$PATH
+        # 1. SETUP ABSOLUTE PATHS
+        # We use absolute paths to avoid issues with nested workspaces
+        CLANG_BIN="$GITHUB_WORKSPACE/kernel_workspace/clang/bin"
+        GCC64_BIN="$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin"
+        GCC32_BIN="$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin"
+        
+        export PATH="$CLANG_BIN:$GCC64_BIN:$GCC32_BIN:$PATH"
         
         # 2. EXPORT CRITICAL VARIABLES
         export ARCH=arm64
         export CLANG_TRIPLE=aarch64-linux-android-
         export KBUILD_BUILD_USER="Jbub5"
         export KBUILD_BUILD_HOST="GitHub-Actions"
-        
+
         # 3. DEFINE BUILD ARGUMENTS
-        # Added explicit CROSS_COMPILE paths to force the kernel to find GCC
+        # We force the CROSS_COMPILE variables here to ensure make finds the GCC binaries
         ARGS="O=out \
               CROSS_COMPILE=aarch64-linux-android- \
               CROSS_COMPILE_ARM32=arm-linux-androideabi- \
