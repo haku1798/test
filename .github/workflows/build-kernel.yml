@@ -119,30 +119,13 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # 1. SET DEFINITIVE PATHS
-        CLANG_BIN="$GITHUB_WORKSPACE/kernel_workspace/clang/bin"
-        GCC64_BIN="$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin"
-        GCC32_BIN="$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin"
+        # Ensure path is absolutely set
+        export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH"
         
-        # 2. CONSTRUCT PATH & EXPORT VARIABLES
-        export PATH="$CLANG_BIN:$GCC64_BIN:$GCC32_BIN:$PATH"
-        export ARCH=arm64
-        export CLANG_TRIPLE=aarch64-linux-android-
-        export KBUILD_BUILD_USER="Jbub5"
-        export KBUILD_BUILD_HOST="GitHub-Actions"
-
-        # 3. DEFINE BUILD ARGUMENTS
-        ARGS="O=out \
-              PATH=$PATH \
-              CROSS_COMPILE=aarch64-linux-android- \
-              CROSS_COMPILE_ARM32=arm-linux-androideabi- \
-              ${{ env.EXTRA_CMDS }}"
+        # Use quotes for ARGS to prevent "false" errors
+        ARGS="O=out ARCH=arm64 ${{ env.EXTRA_CMDS }}"
         
-        if [ "${{ env.USE_CLANG }}" = "true" ]; then
-            export CC=clang
-        fi
-
-        # 4. EXECUTE BUILD
+        # Execute
         make -j$(nproc --all) $ARGS ${DEVICE}_defconfig
         make -j$(nproc --all) $ARGS
         
