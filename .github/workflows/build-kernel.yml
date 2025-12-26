@@ -271,36 +271,27 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
         # 1. Setup Toolchain Path
-        if [ ${{ env.USE_GCC }} = true ]; then
-            [ ${{ env.USE_GCC_64 }} = true ] && export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
-            [ ${{ env.USE_GCC_32 }} = true ] && export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
-            COMPILER="gcc"
-        elif [ ${{ env.USE_CLANG }} = true ]; then
-            export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$PATH
-            COMPILER="clang"
+        export CLANG_PATH=$GITHUB_WORKSPACE/kernel_workspace/clang/bin
+        export PATH=$CLANG_PATH:$PATH
+        
+        # 2. Setup Ccache (The Safe Way)
+        if [ ${{ env.ENABLE_CCACHE }} = true ]; then
+            sudo apt-get install ccache -y
+            # Create a symlink so 'clang' actually calls 'ccache clang'
+            mkdir -p $GITHUB_WORKSPACE/ccache_bin
+            ln -s $(which ccache) $GITHUB_WORKSPACE/ccache_bin/clang
+            export PATH=$GITHUB_WORKSPACE/ccache_bin:$PATH
+            echo "Ccache enabled via PATH symlink"
         fi
 
-        # 2. Setup Build Info
+        # 3. Setup Build Info
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # 3. Handle Ccache
-        if [ ${{ env.ENABLE_CCACHE }} = true ]; then
-            COMPILER="ccache $COMPILER"
-        fi
-
-        # 4. Define Common Args (Ensures consistency between config and build)
-        MAKE_ARGS="-j$(nproc --all) \
-            O=out \
-            ARCH=${{ env.KERNEL_ARCH }} \
-            CC=\"$COMPILER\" \
-            ${{ env.EXTRA_CMDS }}"
-
-        # 5. Generate .config
-        make $MAKE_ARGS ${{ env.DEVICE }}_defconfig
-
-        # 6. Build the Kernel
-        make $MAKE_ARGS
+        # 4. Run Build (Simple CC=clang, no quotes needed)
+        # The 'ccache' is handled automatically because of the PATH order
+        make -j$(nproc --all) O=out ARCH=${{ env.KERNEL_ARCH }} CC=clang ${{ env.EXTRA_CMDS }} ${{ env.DEVICE }}_defconfig
+        make -j$(nproc --all) O=out ARCH=${{ env.KERNEL_ARCH }} CC=clang ${{ env.EXTRA_CMDS }}
 
     - name: Check a kernel output files
       run: |
