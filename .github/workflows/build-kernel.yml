@@ -46,6 +46,7 @@ jobs:
       run: |
         echo "BUILD_TIME=$(TZ=UTC date "+%Y%m%d%H%M")" >> $GITHUB_ENV
         sudo apt-get update
+        mkdir -p kernel_workspace
         
     - name: Install python2
       if: env.ENABLE_PYTHON2 == 'true'
@@ -67,7 +68,8 @@ jobs:
     - name: Download Clang
       if: env.USE_CLANG == 'true'
       run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
+        mkdir -p kernel_workspace  # Double check folder exists
+        cd kernel_workspace
         if [[ ${{ env.CLANG_SOURCE }} == *'.tar.gz' ]]; then
             wget -nv -O clang.tar.gz ${{ env.CLANG_SOURCE }}
             mkdir clang && tar -C clang/ -zxvf clang.tar.gz && rm clang.tar.gz
@@ -81,7 +83,7 @@ jobs:
     - name: Download GCC
       if: env.USE_GCC == 'true'
       run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
+        cd kernel_workspace
         if [ ${{ env.USE_GCC_64 }} = true ]; then
             git clone ${{ env.GCC_64_SOURCE }} -b ${{ env.GCC_64_BRANCH }} gcc-64 --depth=1
         fi
@@ -91,7 +93,7 @@ jobs:
 
     - name: Download kernel source
       run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
+        cd kernel_workspace
         git clone --recursive ${{ env.KERNEL_SOURCE }} -b ${{ env.KERNEL_SOURCE_BRANCH }} android-kernel --depth=1
 
     - name: Fix configurations
@@ -115,10 +117,10 @@ jobs:
 
     - name: Build kernel
       run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        cd kernel_workspace/android-kernel
         
         # 1. SETUP PATHS - This ensures our AOSP GCC 4.9 is used
-        [ -d "$GITHUB_WORKSPACE/kernel_workspace/clang/bin" ] && export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$PATH
+        [ -d "$GITHUB_WORKSPACE/kernel_workspace/clang/bin" ] && export PATH=$PWD/../clang/bin:$PATH
         [ -d "$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin" ] && export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
         [ -d "$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin" ] && export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
         
