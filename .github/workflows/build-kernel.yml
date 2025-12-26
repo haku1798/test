@@ -289,11 +289,18 @@ jobs:
             COMPILER="ccache $COMPILER"
         fi
 
-        # 4. Generate .config (Crucial: EXTRA_CMDS must be here to avoid 'false' error)
-        make -j$(nproc --all) O=out ARCH=${{ env.KERNEL_ARCH }} CC="$COMPILER" ${{ env.EXTRA_CMDS }} ${{ env.DEVICE }}_defconfig
+        # 4. Define Common Args (Ensures consistency between config and build)
+        MAKE_ARGS="-j$(nproc --all) \
+            O=out \
+            ARCH=${{ env.KERNEL_ARCH }} \
+            CC=\"$COMPILER\" \
+            ${{ env.EXTRA_CMDS }}"
 
-        # 5. Build the Kernel
-        make -j$(nproc --all) O=out ARCH=${{ env.KERNEL_ARCH }} CC="$COMPILER" ${{ env.EXTRA_CMDS }}
+        # 5. Generate .config
+        make $MAKE_ARGS ${{ env.DEVICE }}_defconfig
+
+        # 6. Build the Kernel
+        make $MAKE_ARGS
 
     - name: Check a kernel output files
       run: |
