@@ -259,13 +259,6 @@ jobs:
             cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         fi
 
-    - name: Setup ccache
-      if: env.ENABLE_CCACHE == 'true'
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        key: build-kernel-${{ env.DEVICE }}${{ env.LOCALVERSION }}${{ env.UPLOADNAME }}
-        max-size: 2G
-
     - name: Build kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
@@ -273,31 +266,42 @@ jobs:
         # 1. Setup Toolchain Path
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$PATH
         
-        # 2. Setup Ccache without shell quoting issues
+        # 2. Setup Ccache (Safe way to avoid syntax errors)
         if [ "${{ env.ENABLE_CCACHE }}" = "true" ]; then
             sudo apt-get update && sudo apt-get install -y ccache
-            # Create a dedicated bin folder for ccache symlinks
             mkdir -p $GITHUB_WORKSPACE/ccache_bin
             ln -sf $(which ccache) $GITHUB_WORKSPACE/ccache_bin/clang
-            ln -sf $(which ccache) $GITHUB_WORKSPACE/ccache_bin/aarch64-linux-android-gcc
             export PATH=$GITHUB_WORKSPACE/ccache_bin:$PATH
-            echo "Ccache configured via PATH"
         fi
 
-        # 3. Setup Build Environment Variables
-        export KBUILD_BUILD_HOST=Github-Action
-        export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
-        
-        # 4. Define common make arguments to ensure consistency
-        # Using a variable prevents repeating complex strings
-        MAKE_OPTS="-j$(nproc --all) O=out ARCH=${{ env.KERNEL_ARCH }} CC=clang ${{ env.EXTRA_CMDS }}"
-
-        # 5. Clean out directory to reset failed capability checks
+        # 3. CRITICAL: Wipe the 'out' directory to clear 'false' cache
         rm -rf out && mkdir out
 
-        # 6. Generate configuration and build
-        make $MAKE_OPTS ${{ env.DEVICE }}_defconfig
-        make $MAKE_OPTS
+        # 4. Define ALL tools to prevent capability check failures
+        # This tells the kernel exactly what to use for every task
+        BUILD_ARGS="
+          LLVM=1 \
+          LLVM_IAS=1 \
+          CC=clang \
+          LD=ld.lld \
+          AR=llvm-ar \
+          NM=llvm-nm \
+          OBJCOPY=llvm-objcopy \
+          OBJDUMP=llvm-objdump \
+          STRIP=llvm-strip \
+          OBJSIZE=llvm-size \
+          READELF=llvm-readelf \
+          HOSTCC=clang \
+          HOSTCXX=clang++ \
+          HOSTLD=ld.lld \
+          CLANG_TRIPLE=aarch64-linux-gnu- \
+          CROSS_COMPILE=aarch64-linux-android- \
+          CROSS_COMPILE_ARM32=arm-linux-androideabi-
+        "
+
+        # 5. Run the Build
+        make -j$(nproc --all) O=out ARCH=arm64 $BUILD_ARGS ${{ env.DEVICE }}_defconfig
+        make -j$(nproc --all) O=out ARCH=arm64 $BUILD_ARGS
 
     - name: Check a kernel output files
       run: |
