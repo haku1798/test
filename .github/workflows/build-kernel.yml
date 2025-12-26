@@ -122,10 +122,11 @@ jobs:
         # Ensure path is absolutely set
         export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH"
         
-        # Use quotes for ARGS to prevent "false" errors
+        # Define base arguments
+        # IMPORTANT: Wrap ${{ env.EXTRA_CMDS }} in double quotes here
         ARGS="O=out ARCH=arm64 ${{ env.EXTRA_CMDS }}"
         
-        # Execute
+        # Execute the build
         make -j$(nproc --all) $ARGS ${DEVICE}_defconfig
         make -j$(nproc --all) $ARGS
         
