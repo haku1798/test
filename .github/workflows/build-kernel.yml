@@ -36,6 +36,7 @@ jobs:
     - name: Prepare environment
       run: |
         grep -v -E "^#|^\n" config.env | sed 's/ #.*//; s/#.*//' >> $GITHUB_ENV
+        echo "CONFIG_BACKLIGHT_LCD_SUPPORT=y" >> kernel_workspace/android-kernel/arch/arm64/configs/${{ env.DEVICE }}_defconfig
 
     - name: Set swap to 10G
       uses: pierotofy/set-swap-space@master
@@ -48,6 +49,14 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32ncurses-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses6 libncurses-dev libsdl1.2-dev libssl-dev libwxgtk3.2-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
+
+    - name: Disable Stack Protector Check
+      run: |
+        cd kernel_workspace/android-kernel
+        # This force-disables the security check that is crashing your build
+        sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/g' arch/arm64/configs/${{ env.DEVICE }}_defconfig
+        # Also ensure it's disabled in the generated .config later if needed
+        echo "CONFIG_CC_STACKPROTECTOR_NONE=y" >> arch/arm64/configs/${{ env.DEVICE }}_defconfig
 
     - name: Install python2
       if: env.ENABLE_PYTHON2 == 'true'
