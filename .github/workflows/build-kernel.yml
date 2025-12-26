@@ -117,48 +117,38 @@ jobs:
         key: build-kernel-${{ env.DEVICE }}
         max-size: 2G
 
-    - name: Build kernel
+    -- name: Build kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
         # 1. SETUP PATHS
-        # Add toolchains to PATH
         [ -d "$GITHUB_WORKSPACE/kernel_workspace/clang/bin" ] && export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$PATH
         [ -d "$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin" ] && export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
         [ -d "$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin" ] && export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
         
         # 2. DEFINE BUILD ARGUMENTS
-        # Using CROSS_COMPILE even with Clang is essential for ARM64 kernels
-        ARGS="ARCH=${{ env.KERNEL_ARCH }} O=out \
-              CROSS_COMPILE=aarch64-linux-gnu- \
-              CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
+        # We use the EXTRA_CMDS from your config.env to ensure the android- prefix is used
+        ARGS="ARCH=${{ env.KERNEL_ARCH }} O=out ${{ env.EXTRA_CMDS }}"
         
         if [ "${{ env.USE_CLANG }}" = "true" ]; then
-            ARGS="$ARGS CC=clang \
-                  CLANG_TRIPLE=aarch64-linux-gnu- \
-                  LD=ld.lld \
-                  AR=llvm-ar \
-                  NM=llvm-nm \
-                  OBJCOPY=llvm-objcopy \
-                  OBJDUMP=llvm-objdump \
-                  STRIP=llvm-strip"
+            # Add Clang specific flags while keeping the prefixes from EXTRA_CMDS
+            ARGS="CC=clang CLANG_TRIPLE=aarch64-linux-android- $ARGS"
         fi
 
         # 3. APPLY CCACHE IF ENABLED
         if [ "${{ env.ENABLE_CCACHE }}" = "true" ]; then
-            # Inject ccache into the CC variable
             if [ "${{ env.USE_CLANG }}" = "true" ]; then
                 export CC="ccache clang"
             else
-                export CC="ccache aarch64-linux-gnu-gcc"
+                export CC="ccache aarch64-linux-android-gcc"
             fi
-            ARGS="$ARGS CC=\"$CC\""
+            ARGS="CC=\"$CC\" $ARGS"
         fi
 
         # 4. EXECUTE BUILD
         make -j$(nproc --all) $ARGS ${DEVICE}_defconfig
         make -j$(nproc --all) $ARGS
-
+        
     - name: Upload kernel image
       if: success()
       uses: actions/upload-artifact@v4
