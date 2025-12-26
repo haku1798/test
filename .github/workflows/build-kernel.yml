@@ -119,23 +119,25 @@ jobs:
       run: |
         cd kernel_workspace/android-kernel
         
-        # 1. SETUP ABSOLUTE PATHS
-        # We use absolute paths to avoid issues with nested workspaces
-        CLANG_BIN="$GITHUB_WORKSPACE/kernel_workspace/clang/bin"
-        GCC64_BIN="$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin"
-        GCC32_BIN="$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin"
-        
-        export PATH="$CLANG_BIN:$GCC64_BIN:$GCC32_BIN:$PATH"
+        # 1. FIND ACTUAL BIN DIRECTORIES (Handles nested folders automatically)
+        CLANG_BIN=$(realpath ../clang/bin)
+        # Using wildcards to find the bin folder regardless of nesting depth
+        GCC64_BIN=$(realpath ../gcc-64/**/bin | head -n 1)
+        GCC32_BIN=$(realpath ../gcc-32/**/bin | head -n 1)
         
         # 2. EXPORT CRITICAL VARIABLES
         export ARCH=arm64
         export CLANG_TRIPLE=aarch64-linux-android-
         export KBUILD_BUILD_USER="Jbub5"
         export KBUILD_BUILD_HOST="GitHub-Actions"
+        
+        # 3. CONSTRUCT PATH
+        export PATH="$CLANG_BIN:$GCC64_BIN:$GCC32_BIN:$PATH"
 
-        # 3. DEFINE BUILD ARGUMENTS
-        # We force the CROSS_COMPILE variables here to ensure make finds the GCC binaries
+        # 4. DEFINE BUILD ARGUMENTS
+        # We pass the PATH explicitly to the make command as well
         ARGS="O=out \
+              PATH=$PATH \
               CROSS_COMPILE=aarch64-linux-android- \
               CROSS_COMPILE_ARM32=arm-linux-androideabi- \
               ${{ env.EXTRA_CMDS }}"
@@ -144,7 +146,7 @@ jobs:
             export CC=clang
         fi
 
-        # 4. EXECUTE BUILD
+        # 5. EXECUTE BUILD
         make -j$(nproc --all) $ARGS ${DEVICE}_defconfig
         make -j$(nproc --all) $ARGS
         
