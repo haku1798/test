@@ -121,13 +121,11 @@ jobs:
         
         export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH"
         
-        ARGS="O=out ARCH=arm64 "${{ env.EXTRA_CMDS }}""
+        ARGS="O=out ARCH=arm64 ${{ env.EXTRA_CMDS }}"
         
-        mkdir -p out
-
         make -j$(nproc --all) $ARGS ${DEVICE}_defconfig
 
-        make -j$(nproc --all) $ARGSS
+        make -j$(nproc --all) $ARGS
         
     - name: Upload kernel image
       if: success()
