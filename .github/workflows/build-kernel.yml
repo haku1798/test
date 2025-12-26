@@ -35,7 +35,7 @@ jobs:
 
     - name: Prepare environment
       run: |
-        grep -v -E "^#|^\n" config.env | sed 's/ #.*//; s/#.*//' >> $GITHUB_ENV
+        grep -v -E "^#|^\n" config.env | sed 's/ #.*//; s/#.*//' >> $GITHUB_ENV     
 
     - name: Set swap to 10G
       uses: pierotofy/set-swap-space@master
@@ -46,9 +46,10 @@ jobs:
       run: |
         echo "BUILD_TIME=$(TZ=UTC date "+%Y%m%d%H%M")" >> $GITHUB_ENV
         sudo apt-get update
-        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32ncurses-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses6 libncurses-dev libsdl1.2-dev libssl-dev libwxgtk3.2-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+        # Added lld and llvm here to fix the "ld.lld not found" error
+        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32ncurses-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses6 libncurses-dev libsdl1.2-dev libssl-dev libwxgtk3.2-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev lld llvm
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
-
+        
     - name: Install python2
       if: env.ENABLE_PYTHON2 == 'true'
       run: |
@@ -170,11 +171,11 @@ jobs:
 
     - name: Disable Stack Protector Check
       run: |
-        cd kernel_workspace/android-kernel
-        # This force-disables the security check that is crashing your build
-        sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/g' arch/arm64/configs/${{ env.DEVICE }}_defconfig
-        # Also ensure it's disabled in the generated .config later if needed
-        echo "CONFIG_CC_STACKPROTECTOR_NONE=y" >> arch/arm64/configs/${{ env.DEVICE }}_defconfig
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        # Fix the stack protector error
+        sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/CONFIG_CC_STACKPROTECTOR_NONE=y/g' arch/arm64/configs/${DEVICE}_defconfig
+        # Fix the backlight dependency warning found in your logs
+        echo "CONFIG_BACKLIGHT_LCD_SUPPORT=y" >> arch/arm64/configs/${DEVICE}_defconfig
 
     - name: Download source boot image
       if: env.BUILD_BOOT_IMG == 'true'
@@ -277,39 +278,33 @@ jobs:
     - name: Build kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        if [ ${{ env.USE_GCC }} = true ]; then
-            if [ ${{ env.USE_GCC_64 }} = true ]; then
-                export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
-            fi
-            if [ ${{ env.USE_GCC_32 }} = true ]; then
-                export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
-            fi
-        elif [ ${{ env.USE_CLANG }} = true ]; then
+        
+        # 1. INITIALIZE ARGS VARIABLE
+        ARGS="ARCH=${{ env.KERNEL_ARCH }} O=out"
+        
+        # 2. ADD TOOLCHAIN ARGUMENTS
+        if [ "${{ env.USE_CLANG }}" = "true" ]; then
             export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$PATH
+            ARGS="$ARGS CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1"
+        elif [ "${{ env.USE_GCC }}" = "true" ]; then
+            [ "${{ env.USE_GCC_64 }}" = "true" ] && export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
+            [ "${{ env.USE_GCC_32 }}" = "true" ] && export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
+            ARGS="$ARGS CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
+        fi
+
+        # 3. APPLY CCACHE
+        if [ "${{ env.ENABLE_CCACHE }}" = "true" ]; then
+            [ "${{ env.USE_GCC }}" = "true" ] && export CC="ccache gcc" || export CC="ccache clang"
         else
-            echo "Toolchain not selected"
-            exit 1
+            [ "${{ env.USE_GCC }}" = "true" ] && export CC="gcc" || export CC="clang"
         fi
-        export KBUILD_BUILD_HOST=Github-Action
-        export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
-        if [ -n ${{ env.KSU_EXPECTED_SIZE }} ] && [ -n ${{ env.KSU_EXPECTED_HASH }} ]; then
-          export KSU_EXPECTED_SIZE=${{ env.KSU_EXPECTED_SIZE }}
-          export KSU_EXPECTED_HASH=${{ env.KSU_EXPECTED_HASH }}
-        fi
-        make -j$(nproc --all) CC=clang O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }} ${DEVICE}_defconfig
-        if [ ${{ env.ENABLE_CCACHE }} = true ]; then
-            if [ ${{ env.USE_GCC }} = true ]; then
-                make -j$(nproc --all) CC="ccache gcc" O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }}
-            else
-                make -j$(nproc --all) CC="ccache clang" O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }}
-            fi
-        else
-            if [ ${{ env.USE_GCC }} = true ]; then
-                make -j$(nproc --all) CC=gcc O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }}
-            else
-                make -j$(nproc --all) CC=clang O=out ARCH=${{ env.KERNEL_ARCH }} ${{ env.EXTRA_CMDS }}
-            fi
-        fi
+
+        # 4. EXECUTE
+        # Generate defconfig
+        make -j$(nproc --all) $ARGS ${{ env.EXTRA_CMDS }} ${DEVICE}_defconfig
+        
+        # Build actual kernel (passing the final CC variable)
+        make -j$(nproc --all) $ARGS CC="$CC" ${{ env.EXTRA_CMDS }}
 
     - name: Check a kernel output files
       run: |
