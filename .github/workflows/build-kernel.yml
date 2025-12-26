@@ -117,7 +117,7 @@ jobs:
         key: build-kernel-${{ env.DEVICE }}
         max-size: 2G
 
-    -- name: Build kernel
+    - name: Build kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
