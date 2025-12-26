@@ -36,7 +36,6 @@ jobs:
     - name: Prepare environment
       run: |
         grep -v -E "^#|^\n" config.env | sed 's/ #.*//; s/#.*//' >> $GITHUB_ENV
-        echo "CONFIG_BACKLIGHT_LCD_SUPPORT=y" >> kernel_workspace/android-kernel/arch/arm64/configs/${{ env.DEVICE }}_defconfig
 
     - name: Set swap to 10G
       uses: pierotofy/set-swap-space@master
