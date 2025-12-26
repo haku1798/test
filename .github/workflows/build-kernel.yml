@@ -119,37 +119,19 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # 1. DEBUG: List what we actually have (helps find the path if it fails)
-        echo "Checking toolchain directories..."
-        ls -R $GITHUB_WORKSPACE/kernel_workspace/gcc-64 | head -n 20
-        
-        # 2. FIND ACTUAL BIN DIRECTORIES
-        # We search for the compiler and then get its directory
-        GCC64_PATH=$(find $GITHUB_WORKSPACE/kernel_workspace/gcc-64 -name "aarch64-linux-android-gcc" -type f | head -n 1)
-        GCC32_PATH=$(find $GITHUB_WORKSPACE/kernel_workspace/gcc-32 -name "arm-linux-androideabi-gcc" -type f | head -n 1)
-        
-        if [ -z "$GCC64_PATH" ]; then
-          echo "ERROR: aarch64-linux-android-gcc NOT FOUND in gcc-64 folder!"
-          find $GITHUB_WORKSPACE/kernel_workspace/gcc-64 -maxdepth 3
-          exit 1
-        fi
-
-        GCC64_BIN=$(dirname "$GCC64_PATH")
-        GCC32_BIN=$(dirname "$GCC32_PATH")
+        # 1. SET DEFINITIVE PATHS
         CLANG_BIN="$GITHUB_WORKSPACE/kernel_workspace/clang/bin"
+        GCC64_BIN="$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin"
+        GCC32_BIN="$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin"
         
-        echo "Found GCC64 at: $GCC64_BIN"
-        echo "Found GCC32 at: $GCC32_BIN"
-
-        # 3. CONSTRUCT PATH & EXPORT VARIABLES
+        # 2. CONSTRUCT PATH & EXPORT VARIABLES
         export PATH="$CLANG_BIN:$GCC64_BIN:$GCC32_BIN:$PATH"
         export ARCH=arm64
         export CLANG_TRIPLE=aarch64-linux-android-
         export KBUILD_BUILD_USER="Jbub5"
         export KBUILD_BUILD_HOST="GitHub-Actions"
 
-        # 4. DEFINE BUILD ARGUMENTS
-        # Using simple quotes to avoid shell expansion issues in ARGS
+        # 3. DEFINE BUILD ARGUMENTS
         ARGS="O=out \
               PATH=$PATH \
               CROSS_COMPILE=aarch64-linux-android- \
@@ -160,7 +142,7 @@ jobs:
             export CC=clang
         fi
 
-        # 5. EXECUTE BUILD
+        # 4. EXECUTE BUILD
         make -j$(nproc --all) $ARGS ${DEVICE}_defconfig
         make -j$(nproc --all) $ARGS
         
