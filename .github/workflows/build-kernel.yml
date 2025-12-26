@@ -1,15 +1,15 @@
+---
 name: Build Kernel
 on:
   workflow_dispatch:
     inputs:
       select_device:
-        description: 'Select device:'
+        description: "Select device:"
         required: true
         type: choice
         options:
-        - 'lancelot'
-        - 'merlin'
-
+          - lancelot
+          - merlin
 jobs:
   build:
     name: Build Kernel by ${{ github.actor }}
@@ -20,171 +20,192 @@ jobs:
       CCACHE_NOHASHDIR: "true"
       CCACHE_HARDLINK: "true"
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - name: Maximize build space
+        if: env.REMOVE_UNUSED_PACKAGES == 'true'
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192
+          temp-reserve-mb: 2048
+          remove-dotnet: "true"
+          remove-android: "true"
+          remove-haskell: "true"
+          remove-codeql: "true"
+      - name: Prepare environment
+        run: >
+          grep -v -E "^#|^\n" config.env | sed 's/ #.*//; s/#.*//' >>
+          $GITHUB_ENV     
+      - name: Set swap to 10G
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 10
+      - name: Debug ALL Build Variables
+        run: |
+          echo "=== BUILD CONFIGURATION ==="
+          echo "DEVICE: ${{ env.DEVICE }}"
+          echo ""
+          echo "=== COMPILER SETTINGS ==="
+          echo "USE_CLANG: ${{ env.USE_CLANG }}"
+          echo "CLANG_SOURCE: ${{ env.CLANG_SOURCE }}"
+          echo "CLANG_BRANCH: ${{ env.CLANG_BRANCH }}"
+          echo ""
+          echo "USE_GCC: ${{ env.USE_GCC }}"
+          echo "USE_GCC_64: ${{ env.USE_GCC_64 }}"
+          echo "GCC_64_SOURCE: ${{ env.GCC_64_SOURCE }}"
+          echo "GCC_64_BRANCH: ${{ env.GCC_64_BRANCH }}"
+          echo "USE_GCC_32: ${{ env.USE_GCC_32 }}"
+          echo "GCC_32_SOURCE: ${{ env.GCC_32_SOURCE }}"
+          echo "GCC_32_BRANCH: ${{ env.GCC_32_BRANCH }}"
+          echo ""
+          echo "=== OTHER SETTINGS ==="
+          echo "DISABLE_CC_WERROR: ${{ env.DISABLE_CC_WERROR }}"
+          echo "EXTRA_CMDS: ${{ env.EXTRA_CMDS }}"
+          echo ""
+          echo "=== Checking if config.env was loaded ==="
+          echo "Listing environment variables containing 'GCC' or 'CLANG':"
+          env | grep -i gcc || true
+          env | grep -i clang || true
+      - name: Setup kernel build environment
+        run: |
+          echo "BUILD_TIME=$(TZ=UTC date "+%Y%m%d%H%M")" >> $GITHUB_ENV
+          sudo apt-get update
+          mkdir -p kernel_workspace
+      - name: Install python2
+        if: env.ENABLE_PYTHON2 == 'true'
+        run: >
+          mkdir -p ~/python2-jammy && cd ~/python2-jammy
 
-    - name: Maximize build space
-      if: env.REMOVE_UNUSED_PACKAGES == 'true'
-      uses: easimon/maximize-build-space@master
-      with:
-        root-reserve-mb: 8192
-        temp-reserve-mb: 2048
-        remove-dotnet: 'true'
-        remove-android: 'true'
-        remove-haskell: 'true'
-        remove-codeql: 'true'
+          wget http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/python2.7_2.7.18-13ubuntu1.5_amd64.deb
 
-    - name: Prepare environment
-      run: |
-        grep -v -E "^#|^\n" config.env | sed 's/ #.*//; s/#.*//' >> $GITHUB_ENV     
+          wget http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/libpython2.7-stdlib_2.7.18-13ubuntu1.5_amd64.deb
 
-    - name: Set swap to 10G
-      uses: pierotofy/set-swap-space@master
-      with:
-        swap-size-gb: 10
+          wget http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/python2.7-minimal_2.7.18-13ubuntu1.5_amd64.deb
 
-    - name: Debug ALL Build Variables
-      run: |
-        echo "=== BUILD CONFIGURATION ==="
-        echo "DEVICE: ${{ env.DEVICE }}"
-        echo ""
-        echo "=== COMPILER SETTINGS ==="
-        echo "USE_CLANG: ${{ env.USE_CLANG }}"
-        echo "CLANG_SOURCE: ${{ env.CLANG_SOURCE }}"
-        echo "CLANG_BRANCH: ${{ env.CLANG_BRANCH }}"
-        echo ""
-        echo "USE_GCC: ${{ env.USE_GCC }}"
-        echo "USE_GCC_64: ${{ env.USE_GCC_64 }}"
-        echo "GCC_64_SOURCE: ${{ env.GCC_64_SOURCE }}"
-        echo "GCC_64_BRANCH: ${{ env.GCC_64_BRANCH }}"
-        echo "USE_GCC_32: ${{ env.USE_GCC_32 }}"
-        echo "GCC_32_SOURCE: ${{ env.GCC_32_SOURCE }}"
-        echo "GCC_32_BRANCH: ${{ env.GCC_32_BRANCH }}"
-        echo ""
-        echo "=== OTHER SETTINGS ==="
-        echo "DISABLE_CC_WERROR: ${{ env.DISABLE_CC_WERROR }}"
-        echo "EXTRA_CMDS: ${{ env.EXTRA_CMDS }}"
-        echo ""
-        echo "=== Checking if config.env was loaded ==="
-        echo "Listing environment variables containing 'GCC' or 'CLANG':"
-        env | grep -i gcc || true
-        env | grep -i clang || true
+          wget http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/libpython2.7-minimal_2.7.18-13ubuntu1.5_amd64.deb
 
-    - name: Setup kernel build environment
-      run: |
-        echo "BUILD_TIME=$(TZ=UTC date "+%Y%m%d%H%M")" >> $GITHUB_ENV
-        sudo apt-get update
-        mkdir -p kernel_workspace
-        
-    - name: Install python2
-      if: env.ENABLE_PYTHON2 == 'true'
-      run: |
-        mkdir -p ~/python2-jammy && cd ~/python2-jammy
-        wget http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/python2.7_2.7.18-13ubuntu1.5_amd64.deb
-        wget http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/libpython2.7-stdlib_2.7.18-13ubuntu1.5_amd64.deb
-        wget http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/python2.7-minimal_2.7.18-13ubuntu1.5_amd64.deb
-        wget http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/libpython2.7-minimal_2.7.18-13ubuntu1.5_amd64.deb
-        sudo apt install libnsl2 -y
-        sudo dpkg -i libpython2.7-minimal_*.deb
-        sudo dpkg -i python2.7-minimal_*.deb
-        sudo dpkg -i libpython2.7-stdlib_*.deb
-        sudo dpkg -i python2.7_*.deb
-        sudo apt --fix-broken install
-        sudo ln -s /usr/bin/python2.7 /usr/local/bin/python2
-        rm -rf ~/python2-jammy
+          sudo apt install libnsl2 -y
 
-    - name: Download Clang
-      if: env.USE_CLANG == 'true'
-      run: |
-        mkdir -p kernel_workspace  # Double check folder exists
-        cd kernel_workspace
-        if [[ ${{ env.CLANG_SOURCE }} == *'.tar.gz' ]]; then
-            wget -nv -O clang.tar.gz ${{ env.CLANG_SOURCE }}
-            mkdir clang && tar -C clang/ -zxvf clang.tar.gz && rm clang.tar.gz
-        elif [[ ${{ env.CLANG_SOURCE }} == *'.git' ]]; then
-            git clone ${{ env.CLANG_SOURCE }} -b ${{ env.CLANG_BRANCH }} clang --depth=1
-        else
-            wget -nv -O clang.zip ${{ env.CLANG_SOURCE }}
-            mkdir clang && unzip clang.zip -d clang/ && rm clang.zip
-        fi
+          sudo dpkg -i libpython2.7-minimal_*.deb
 
-    - name: Download GCC
-      if: env.USE_GCC == 'true'
-      run: |
-        cd kernel_workspace
-        if [ ${{ env.USE_GCC_64 }} = true ]; then
-            git clone ${{ env.GCC_64_SOURCE }} -b ${{ env.GCC_64_BRANCH }} gcc-64 --depth=1
-        fi
-        if [ ${{ env.USE_GCC_32 }} = true ]; then
-            git clone ${{ env.GCC_32_SOURCE }} -b ${{ env.GCC_32_BRANCH }} gcc-32 --depth=1
-        fi
+          sudo dpkg -i python2.7-minimal_*.deb
 
-    - name: Download kernel source
-      run: |
-        cd kernel_workspace
-        git clone --recursive ${{ env.KERNEL_SOURCE }} -b ${{ env.KERNEL_SOURCE_BRANCH }} android-kernel --depth=1
+          sudo dpkg -i libpython2.7-stdlib_*.deb
 
-    - name: Fix configurations
+          sudo dpkg -i python2.7_*.deb
+
+          sudo apt --fix-broken install
+
+          sudo ln -s /usr/bin/python2.7 /usr/local/bin/python2
+
+          rm -rf ~/python2-jammy
+      - name: Download Clang
+        if: env.USE_CLANG == 'true'
+        run: >
+          mkdir -p kernel_workspace  # Double check folder exists
+
+          cd kernel_workspace
+
+          if [[ ${{ env.CLANG_SOURCE }} == *'.tar.gz' ]]; then
+              wget -nv -O clang.tar.gz ${{ env.CLANG_SOURCE }}
+              mkdir clang && tar -C clang/ -zxvf clang.tar.gz && rm clang.tar.gz
+          elif [[ ${{ env.CLANG_SOURCE }} == *'.git' ]]; then
+              git clone ${{ env.CLANG_SOURCE }} -b ${{ env.CLANG_BRANCH }} clang --depth=1
+          else
+              wget -nv -O clang.zip ${{ env.CLANG_SOURCE }}
+              mkdir clang && unzip clang.zip -d clang/ && rm clang.zip
+          fi
+      - name: Download GCC
+        if: env.USE_GCC == 'true'
+        run: >
+          cd kernel_workspace
+
+          if [ ${{ env.USE_GCC_64 }} = true ]; then
+              git clone ${{ env.GCC_64_SOURCE }} -b ${{ env.GCC_64_BRANCH }} gcc-64 --depth=1
+          fi
+
+          if [ ${{ env.USE_GCC_32 }} = true ]; then
+              git clone ${{ env.GCC_32_SOURCE }} -b ${{ env.GCC_32_BRANCH }} gcc-32 --depth=1
+          fi
+      - name: Download kernel source
+        run: >
+          cd kernel_workspace
+
+          git clone --recursive ${{ env.KERNEL_SOURCE }} -b ${{ env.KERNEL_SOURCE_BRANCH }} android-kernel --depth=1
+      - name: Fix-configurations
+        run: >
+          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+
+
+          sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/CONFIG_CC_STACKPROTECTOR_NONE=y/g' arch/arm64/configs/${DEVICE}_defconfig
+
+          echo "CONFIG_BACKLIGHT_LCD_SUPPORT=y" >> arch/arm64/configs/${DEVICE}_defconfig
+
+
+          # Disable problematic features
+
+          echo "CONFIG_IKHEADERS=n" >> arch/arm64/configs/${DEVICE}_defconfig
+
+          echo "CONFIG_GCC_PLUGINS=n" >> arch/arm64/configs/${DEVICE}_defconfig
+
+          echo "CONFIG_KASAN=n" >> arch/arm64/configs/${DEVICE}_defconfig
+
+          echo "CONFIG_UBSAN=n" >> arch/arm64/configs/${DEVICE}_defconfig
+      - name: Patch kernel source for GCC compatibility
+        run: >
+          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+
+
+          # Remove problematic no_sanitize attributes that GCC doesn't like
+
+          find . -name "*.h" -type f -exec sed -i 's/__no_sanitize__//g; s/no_sanitize(".*")//g' {} +
+
+
+          # Specifically fix the sock.h issue
+
+          if [ -f "include/net/sock.h" ]; then
+            sed -i '/no_sanitize/d' include/net/sock.h
+            sed -i '/__attribute__.*no_sanitize/d' include/net/sock.h
+          fi
+
+
+          # Fix route.h as well
+
+          if [ -f "include/net/route.h" ]; then
+            sed -i '/no_sanitize/d' include/net/route.h
+            sed -i '/__attribute__.*no_sanitize/d' include/net/route.h
+          fi
+      - name: Setup KernelSU
+        if: env.ENABLE_KERNELSU == 'true'
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          
-          # Apply existing fixes
-          sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/CONFIG_CC_STACKPROTECTOR_NONE=y/g' arch/arm64/configs/${DEVICE}_defconfig
-          echo "CONFIG_BACKLIGHT_LCD_SUPPORT=y" >> arch/arm64/configs/${DEVICE}_defconfig
-          
-          # Disable problematic features
-          echo "CONFIG_IKHEADERS=n" >> arch/arm64/configs/${DEVICE}_defconfig
-          echo "CONFIG_GCC_PLUGINS=n" >> arch/arm64/configs/${DEVICE}_defconfig
-          echo "CONFIG_KASAN=n" >> arch/arm64/configs/${DEVICE}_defconfig
-          echo "CONFIG_UBSAN=n" >> arch/arm64/configs/${DEVICE}_defconfig
+          curl -LSs "$KERNELSU_SETUP_SOURCE" | bash -s ${{ env.KERNELSU_TAG }}
+      - name: Setup ccache
+        if: env.ENABLE_CCACHE == 'true'
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: build-kernel-${{ env.DEVICE }}
+          max-size: 2G
+      - name: Build kernel
+        run: >
+          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
 
-    - name: Patch kernel source for GCC compatibility
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        
-        # Remove problematic no_sanitize attributes that GCC doesn't like
-        find . -name "*.h" -type f -exec sed -i 's/__no_sanitize__//g; s/no_sanitize(".*")//g' {} +
-        
-        # Specifically fix the sock.h issue
-        if [ -f "include/net/sock.h" ]; then
-          sed -i '/no_sanitize/d' include/net/sock.h
-          sed -i '/__attribute__.*no_sanitize/d' include/net/sock.h
-        fi
-        
-        # Fix route.h as well
-        if [ -f "include/net/route.h" ]; then
-          sed -i '/no_sanitize/d' include/net/route.h
-          sed -i '/__attribute__.*no_sanitize/d' include/net/route.h
-        fi
 
-    - name: Setup KernelSU
-      if: env.ENABLE_KERNELSU == 'true'
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        curl -LSs "$KERNELSU_SETUP_SOURCE" | bash -s ${{ env.KERNELSU_TAG }}
+          mkdir -p out
 
-    - name: Setup ccache
-      if: env.ENABLE_CCACHE == 'true'
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        key: build-kernel-${{ env.DEVICE }}
-        max-size: 2G
 
-    - name: Build kernel
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        
-        mkdir -p out
-        
-        export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH"
-        
-        export HOSTCFLAGS="-Wno-deprecated-declarations"
-        
-        make -j$(nproc --all) O=out ARCH=arm64 ${{ env.EXTRA_CMDS }} ${DEVICE}_defconfig
-        make -j$(nproc --all) O=out ARCH=arm64 ${{ env.EXTRA_CMDS }}
-        
-    - name: Upload kernel image
-      if: success()
-      uses: actions/upload-artifact@v4
-      with:
-        name: Image-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
-        path: kernel_workspace/android-kernel/out/arch/${{ env.KERNEL_ARCH }}/boot/${{ env.KERNEL_IMAGE_NAME }}
+          export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH"
+
+
+          export HOSTCFLAGS="-Wno-deprecated-declarations"
+
+
+          make -j$(nproc --all) O=out ARCH=arm64 ${{ env.EXTRA_CMDS }} ${DEVICE}_defconfig
+
+          make -j$(nproc --all) O=out ARCH=arm64 ${{ env.EXTRA_CMDS }}
+      - name: Upload kernel image
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Image-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
+          path: kernel_workspace/android-kernel/out/arch/${{ env.KERNEL_ARCH }}/boot/${{
+            env.KERNEL_IMAGE_NAME }}
