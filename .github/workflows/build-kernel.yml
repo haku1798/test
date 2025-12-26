@@ -119,31 +119,31 @@ jobs:
       run: |
         cd kernel_workspace/android-kernel
         
-        # 1. SETUP PATHS
-        # We use relative paths ($PWD/../) to ensure the runner finds the toolchains
-        export PATH=$PWD/../clang/bin:$PWD/../gcc-64/bin:$PWD/../gcc-32/bin:$PATH
+        # 1. SETUP PATHS - Fixed to ensure the actual binaries are found
+        # We search for the bin directories specifically
+        GCC64_PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin
+        GCC32_PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin
+        CLANG_PATH=$GITHUB_WORKSPACE/kernel_workspace/clang/bin
+        export PATH=$CLANG_PATH:$GCC64_PATH:$GCC32_PATH:$PATH
         
         # 2. EXPORT CRITICAL VARIABLES
-        # This is the "Fix" that satisfies the Makefile check
-        export ARCH=${{ env.KERNEL_ARCH }}
+        export ARCH=arm64
         export CLANG_TRIPLE=aarch64-linux-android-
         export KBUILD_BUILD_USER="Jbub5"
         export KBUILD_BUILD_HOST="GitHub-Actions"
-
+        
         # 3. DEFINE BUILD ARGUMENTS
-        # We keep the rest of your flags from config.env
-        ARGS="O=out ${{ env.EXTRA_CMDS }}"
+        # Added explicit CROSS_COMPILE paths to force the kernel to find GCC
+        ARGS="O=out \
+              CROSS_COMPILE=aarch64-linux-android- \
+              CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+              ${{ env.EXTRA_CMDS }}"
         
         if [ "${{ env.USE_CLANG }}" = "true" ]; then
             export CC=clang
         fi
 
-        # 4. APPLY CCACHE
-        if [ "${{ env.ENABLE_CCACHE }}" = "true" ]; then
-            export CC="ccache $CC"
-        fi
-
-        # 5. EXECUTE BUILD
+        # 4. EXECUTE BUILD
         make -j$(nproc --all) $ARGS ${DEVICE}_defconfig
         make -j$(nproc --all) $ARGS
         
