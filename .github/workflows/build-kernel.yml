@@ -119,29 +119,31 @@ jobs:
       run: |
         cd kernel_workspace/android-kernel
         
-        # 1. SETUP PATHS - This ensures our AOSP GCC 4.9 is used
-        [ -d "$GITHUB_WORKSPACE/kernel_workspace/clang/bin" ] && export PATH=$PWD/../clang/bin:$PATH
-        [ -d "$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin" ] && export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
-        [ -d "$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin" ] && export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
+        # 1. SETUP PATHS
+        # We use relative paths ($PWD/../) to ensure the runner finds the toolchains
+        export PATH=$PWD/../clang/bin:$PWD/../gcc-64/bin:$PWD/../gcc-32/bin:$PATH
         
-        # 2. DEFINE BUILD ARGUMENTS DYNAMICALLY
-        ARGS="ARCH=${{ env.KERNEL_ARCH }} O=out ${{ env.EXTRA_CMDS }}"
+        # 2. EXPORT CRITICAL VARIABLES
+        # This is the "Fix" that satisfies the Makefile check
+        export ARCH=${{ env.KERNEL_ARCH }}
+        export CLANG_TRIPLE=aarch64-linux-android-
+        export KBUILD_BUILD_USER="Jbub5"
+        export KBUILD_BUILD_HOST="GitHub-Actions"
+
+        # 3. DEFINE BUILD ARGUMENTS
+        # We keep the rest of your flags from config.env
+        ARGS="O=out ${{ env.EXTRA_CMDS }}"
         
         if [ "${{ env.USE_CLANG }}" = "true" ]; then
-            ARGS="CC=clang CLANG_TRIPLE=aarch64-linux-android- $ARGS"
+            export CC=clang
         fi
 
-        # 3. APPLY CCACHE
+        # 4. APPLY CCACHE
         if [ "${{ env.ENABLE_CCACHE }}" = "true" ]; then
-            if [ "${{ env.USE_CLANG }}" = "true" ]; then
-                export CC="ccache clang"
-            else
-                export CC="ccache aarch64-linux-android-gcc"
-            fi
-            ARGS="CC=\"$CC\" $ARGS"
+            export CC="ccache $CC"
         fi
 
-        # 4. EXECUTE BUILD
+        # 5. EXECUTE BUILD
         make -j$(nproc --all) $ARGS ${DEVICE}_defconfig
         make -j$(nproc --all) $ARGS
         
