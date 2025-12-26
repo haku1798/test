@@ -123,6 +123,8 @@ jobs:
         
         export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH"
         
+        export HOSTCFLAGS="-Wno-deprecated-declarations"
+        
         make -j$(nproc --all) O=out ARCH=arm64 ${{ env.EXTRA_CMDS }} ${DEVICE}_defconfig
         make -j$(nproc --all) O=out ARCH=arm64 ${{ env.EXTRA_CMDS }}
         
