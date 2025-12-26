@@ -119,21 +119,14 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
+        mkdir -p out
+        
         export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH"
         
-        ARGS="O=out ARCH=arm64 ${{ env.EXTRA_CMDS }}"
+        EXTRA="${{ env.EXTRA_CMDS }}"
         
-        mkdir -p out
-
-        make -j$(nproc --all) $ARGS ${DEVICE}_defconfig
-
-        if [ -f "out/.config" ]; then
-            echo "Successfully generated out/.config"
-        else
-            echo "Error: out/.config not found!" && exit 1
-        fi
-
-        make -j$(nproc --all) $ARGS
+        make -j$(nproc --all) O=out ARCH=arm64 $EXTRA ${DEVICE}_defconfig
+        make -j$(nproc --all) O=out ARCH=arm64 $EXTRA
         
     - name: Upload kernel image
       if: success()
