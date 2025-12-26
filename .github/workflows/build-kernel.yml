@@ -123,7 +123,10 @@ jobs:
         
         ARGS="O=out ARCH=arm64 "${{ env.EXTRA_CMDS }}""
         
+        mkdir -p out
+
         make -j$(nproc --all) $ARGS ${DEVICE}_defconfig
+
         make -j$(nproc --all) $ARGSS
         
     - name: Upload kernel image
