@@ -124,10 +124,37 @@ jobs:
         git clone --recursive ${{ env.KERNEL_SOURCE }} -b ${{ env.KERNEL_SOURCE_BRANCH }} android-kernel --depth=1
 
     - name: Fix configurations
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+          
+          # Apply existing fixes
+          sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/CONFIG_CC_STACKPROTECTOR_NONE=y/g' arch/arm64/configs/${DEVICE}_defconfig
+          echo "CONFIG_BACKLIGHT_LCD_SUPPORT=y" >> arch/arm64/configs/${DEVICE}_defconfig
+          
+          # Disable problematic features
+          echo "CONFIG_IKHEADERS=n" >> arch/arm64/configs/${DEVICE}_defconfig
+          echo "CONFIG_GCC_PLUGINS=n" >> arch/arm64/configs/${DEVICE}_defconfig
+          echo "CONFIG_KASAN=n" >> arch/arm64/configs/${DEVICE}_defconfig
+          echo "CONFIG_UBSAN=n" >> arch/arm64/configs/${DEVICE}_defconfig
+
+    - name: Patch kernel source for GCC compatibility
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/CONFIG_CC_STACKPROTECTOR_NONE=y/g' arch/arm64/configs/${DEVICE}_defconfig
-        echo "CONFIG_BACKLIGHT_LCD_SUPPORT=y" >> arch/arm64/configs/${DEVICE}_defconfig
+        
+        # Remove problematic no_sanitize attributes that GCC doesn't like
+        find . -name "*.h" -type f -exec sed -i 's/__no_sanitize__//g; s/no_sanitize(".*")//g' {} +
+        
+        # Specifically fix the sock.h issue
+        if [ -f "include/net/sock.h" ]; then
+          sed -i '/no_sanitize/d' include/net/sock.h
+          sed -i '/__attribute__.*no_sanitize/d' include/net/sock.h
+        fi
+        
+        # Fix route.h as well
+        if [ -f "include/net/route.h" ]; then
+          sed -i '/no_sanitize/d' include/net/route.h
+          sed -i '/__attribute__.*no_sanitize/d' include/net/route.h
+        fi
 
     - name: Setup KernelSU
       if: env.ENABLE_KERNELSU == 'true'
